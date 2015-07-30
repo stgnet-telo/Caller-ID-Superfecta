@@ -1,0 +1,63 @@
+<?php
+
+class EveryoneAPI extends superfecta_base {
+
+    public $description = "https://www.opencnam.com This data source returns CNAM data for any NANPA phone number (any number that starts with +1).";
+    public $version_requirement = "2.11";
+    public $source_param = array(
+        'Account_SID' => array(
+                'description' => 'Account SID from EveryoneAPI Dashboard',
+                'type' => 'textarea'
+        ),
+        'Auth_Token' => array(
+                'description' => 'Auth Token from EveryoneAPI Dashboard',
+                'type' => 'textarea'
+        ),
+        'Ignore_Keywords' => array(
+                'description' => 'If this source provides CNAM including any of the keywords listed here, the CNAM will be ignored and other sources will be used to find the value.<br>Separate keywords with commas.',
+                'type' => 'textarea',
+                'default' => 'unavailable, unknown'
+        ),
+    );
+
+    function get_caller_id($thenumber, $run_param=array()) {
+
+        $caller_id = null;
+        $this->DebugPrint("Searching EveryoneAPI ... ");
+
+        if ($run_param['Account_SID'] == null or $run_param['Auth_Token'] == null) {
+		$this->DebugPrint("Missing account SID or Auth Token");
+		return($caller_id);
+        }
+        else {
+            // Professional Tier URL (unlimited real-time CNAM lookups)
+            $url = "https://api.everyoneapi.com/v1/phone/" . $thenumber . "?data=CNAM&account_sid=".$run_param['Account_SID']."&auth_token=".$run_param['Auth_Token'];
+        }
+
+        $response = $this->get_url_contents($url);
+	$blob = json_decode($response, true);
+
+	if (!empty($blob['data']['cnam'])) {
+		$sname = $blob['data']['cnam'];
+                // convert list of ignore keywords into array
+                $key_words = array();
+                $temp_array = explode(',',(isset($run_param['Ignore_Keywords'])?$run_param['Ignore_Keywords']:$source_param['Ignore_Keywords']['default']));
+                foreach($temp_array as $val) {
+                    $key_words[] = trim($val);
+                }
+
+                // Remove all ignore keywords from the retuned CNAM string and compare the before and after.
+                $test_string = str_ireplace($key_words,'',$sname);
+                if($test_string == $sname) {
+                    $caller_id = $sname;
+                    $this->DebugPrint("CNAM determined good.");
+                } else {
+                    $this->DebugPrint("CNAM contains flagged key words, returning nothing.");
+                }
+        } else {
+            $this->DebugPrint("CNAM not found.");
+        }
+        return($caller_id);
+    }
+
+}
